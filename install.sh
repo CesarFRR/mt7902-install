@@ -18,10 +18,11 @@ warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 echo ""
-echo -e "${CYAN}╔══════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║     mt7902 Driver Installer          ║${NC}"
-echo -e "${CYAN}║  github.com/hmtheboy154/mt7902       ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════╝${NC}"
+echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║           MT7902 Driver Installer, por CesarFRR          ║${NC}"
+echo -e "${CYAN}║  basado en el repositorio github.com/hmtheboy154/mt7902  ║${NC}"
+echo -e "${CYAN}║  Créditos también para él, yo solo automatizo el proceso ║${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 # ── Detectar distro ──────────────────────────
