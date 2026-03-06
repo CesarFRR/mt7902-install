@@ -114,7 +114,16 @@ success "Repositorio clonado."
 
 # ── Compilar e instalar driver ───────────────
 info "Compilando driver (esto puede tardar unos segundos)..."
-sudo make install -j"$(nproc)" LLVM=1
+# Detectar compilador del kernel
+if grep -q "clang" /proc/version 2>/dev/null; then
+    info "Kernel compilado con Clang, usando LLVM=1..."
+    MAKE_FLAGS="LLVM=1"
+else
+    info "Kernel compilado con GCC, compilando sin LLVM..."
+    MAKE_FLAGS=""
+fi
+
+sudo make install -j"$(nproc)" $MAKE_FLAGS
 success "Driver instalado."
 
 # ── Instalar firmware ────────────────────────
