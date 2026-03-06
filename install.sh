@@ -167,6 +167,33 @@ BT_OK=false
 lsmod | grep -q mt7902e      && WIFI_OK=true
 lsmod | grep -q btusb_mt7902 && BT_OK=true
 
+# --- Optimización de Bluetooth para MT7902 ---
+BT_CONF="/etc/bluetooth/main.conf"
+
+if [ -f "$BT_CONF" ]; then
+    echo -e "\e[1;34m[INFO]\e[0m Optimizando parámetros de Bluetooth para TWS..."
+    
+    # Hacer copia de seguridad por si acaso
+    sudo cp "$BT_CONF" "$BT_CONF.bak"
+
+    # Habilitar AutoEnable (Enciende el BT al arrancar)
+    sudo sed -i 's/^#AutoEnable=false/AutoEnable=true/' "$BT_CONF"
+    sudo sed -i 's/^AutoEnable=false/AutoEnable=true/' "$BT_CONF"
+    sudo sed -i 's/^#AutoEnable=true/AutoEnable=true/' "$BT_CONF"
+
+    # Habilitar FastConnectable (Mejora la respuesta con audífonos baratos)
+    sudo sed -i 's/^#FastConnectable = false/FastConnectable = true/' "$BT_CONF"
+    sudo sed -i 's/^FastConnectable = false/FastConnectable = true/' "$BT_CONF"
+    sudo sed -i 's/^#FastConnectable = true/FastConnectable = true/' "$BT_CONF"
+
+    # Reiniciar el servicio para que CachyOS/Ubuntu tome los cambios
+    sudo systemctl restart bluetooth
+    echo -e "\e[1;32m[OK]\e[0m Configuración de Bluetooth aplicada."
+else
+    echo -e "\e[1;33m[WARN]\e[0m No se encontró /etc/bluetooth/main.conf. Saltando optimización."
+fi
+# --------------------------------------------
+
 if $WIFI_OK && $BT_OK; then
     echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║   ✓  WiFi y Bluetooth cargados, revisa!! ║${NC}"
