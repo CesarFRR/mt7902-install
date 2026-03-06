@@ -67,15 +67,11 @@ elif [[ "$DISTRO" == "debian" ]]; then
     sudo apt update -qq
 
     info "Instalando paquetes necesarios..."
-    # Usamos el metapaquete linux-headers-generic o linux-headers-amd64
-    # Estos siempre apuntan a la versión correcta sin importar los números del kernel
-    if [[ -f /etc/kali_version ]]; then
-        # Específico para Kali
-        sudo apt install -y clang git build-essential linux-headers-amd64
-    else
-        # Para Ubuntu/Debian/Kubuntu
-        sudo apt install -y clang git build-essential linux-headers-generic || sudo apt install -y linux-headers-amd64
-    fi
+    # Instalación a prueba de cualquier distro basada en debian:
+    sudo apt install -y clang git build-essential
+    sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
+    sudo apt install -y linux-headers-generic 2>/dev/null || \
+    sudo apt install -y linux-headers-amd64
 fi
 
 success "Dependencias instaladas."
