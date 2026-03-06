@@ -171,7 +171,7 @@ lsmod | grep -q btusb_mt7902 && BT_OK=true
 BT_CONF="/etc/bluetooth/main.conf"
 
 if [ -f "$BT_CONF" ]; then
-    echo -e "\e[1;34m[INFO]\e[0m Aplicando configuración de estabilidad para TWS..."
+    echo -e "\e[1;34m[INFO]\e[0m Aplicando configuración de estabilidad para Bluetooth..."
 
     # Función interna para procesar los cambios (Busca/Edita o Agrega)
     # Uso: fix_bt "Sección" "Parámetro" "Valor"
