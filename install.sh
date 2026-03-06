@@ -60,10 +60,10 @@ if [[ "$DISTRO" == "arch" ]]; then
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
 elif [[ "$DISTRO" == "debian" ]]; then
-    # 1. Limpieza de CD-ROM (Evita errores de lectura de disco/USB)
+    # 1. Limpieza de CD-ROM
     sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
 
-    # 2. Reparación preventiva de DPKG (Por si se interrumpió antes)
+    # 2. Reparación preventiva de DPKG
     info "Verificando integridad del sistema de paquetes..."
     sudo dpkg --configure -a 2>/dev/null
 
@@ -71,23 +71,59 @@ elif [[ "$DISTRO" == "debian" ]]; then
     info "Actualizando repositorios..."
     sudo apt update -qq
 
-    # 4. Reparación profunda de dependencias (Arregla libc6 y PostgreSQL en modo silencioso)
+    # 4. Reparación profunda y silenciosa (Evita cuadros azules)
     info "Reparando posibles dependencias rotas y estabilizando el sistema..."
-    sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+    sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -qq
 
-    # 5. Instalación de paquetes base (Clang, Git, Build-Essential)
-    info "Instalando herramientas de compilación en modo no interactivo..."
+    # 5. Instalación de herramientas base
+    info "Instalando herramientas de compilación..."
     if ! sudo DEBIAN_FRONTEND=noninteractive apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" clang git build-essential; then
         warn "Fallo inicial. Intentando forzar actualización de librerías base..."
         sudo DEBIAN_FRONTEND=noninteractive apt install -y libc6 libc6-dev
-        sudo DEBIAN_FRONTEND=noninteractive apt install -y clang git build-essential
     fi
 
-    # 6. Instalación de headers (Lógica universal para Kali/Ubuntu/Debian)
+    # 6. Instalación de headers (Lógica universal)
     info "Instalando headers del kernel..."
     sudo DEBIAN_FRONTEND=noninteractive apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
     sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-generic 2>/dev/null || \
     sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
+
+    # ── VALIDACIÓN DE KERNEL (Sincronización necesaria) ─────────────────────
+    # Extraemos la versión de los headers instalados vs kernel actual
+    # ── VALIDACIÓN DE KERNEL (Sincronización robusta) ─────────────────────
+    # 1. Extraemos solo los números de los headers instalados (ej: 6.18.12)
+    LATEST_HEADERS=$(dpkg -l | grep linux-headers- | grep amd64 | awk '{print $3}' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
+    
+    # 2. Extraemos solo los números del kernel en ejecución (ej: 6.12.38)
+    # Esto elimina el "+kali-amd64" o cualquier otro sufijo de distro
+    CURRENT_KERNEL=$(uname -r | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+    info "Versión Headers: $LATEST_HEADERS | Versión Kernel: $CURRENT_KERNEL"
+
+    if [[ -n "$LATEST_HEADERS" && "$LATEST_HEADERS" != "$CURRENT_KERNEL" ]]; then
+        echo -e "\n${YELLOW}╔══════════════════════ ATENCIÓN ══════════════════════╗${NC}"
+        echo -e "${YELLOW}║${NC} Se han instalado headers para el kernel ${GREEN}$LATEST_HEADERS${NC}    ${YELLOW}║${NC}"
+        echo -e "${YELLOW}║${NC} Pero tu sistema aún corre con el kernel ${RED}$CURRENT_KERNEL${NC}      ${YELLOW}║${NC}"
+        echo -e "${YELLOW}╟──────────────────────────────────────────────────────╢${NC}"
+        echo -e "${YELLOW}║${NC} IMPORTANTE: Para que el driver compile, el Kernel   ${YELLOW}║${NC}"
+        echo -e "${YELLOW}║${NC} y sus Headers deben ser la misma versión.           ${YELLOW}║${NC}"
+        echo -e "${YELLOW}║${NC} Es obligatorio actualizar y REINICIAR el equipo.     ${YELLOW}║${NC}"
+        echo -e "${YELLOW}╚══════════════════════════════════════════════════════╝${NC}\n"
+
+        # Forzamos lectura desde la terminal (/dev/tty) para saltar el pipe del curl
+        read -rp "$(echo -e "${CYAN}[?]${NC} ¿Deseas aplicar el Kernel nuevo y reiniciar ahora? [s/N]: ")" RESP </dev/tty
+        
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            info "Actualizando Kernel y reiniciando..."
+            sudo DEBIAN_FRONTEND=noninteractive apt full-upgrade -y
+            success "Listo. Reiniciando en 5 segundos..."
+            sleep 5
+            sudo reboot
+        else
+            error "Cancelado. Debes reiniciar manualmente con el kernel nuevo para continuar."
+        fi
+    fi
+    # ────────────────────────────────────────────────────────────────────────
 fi
 
 success "Dependencias instaladas."
