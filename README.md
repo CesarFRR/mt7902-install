@@ -15,8 +15,15 @@ Automatic installer for the [MT7902 Wi-Fi driver](https://github.com/hmtheboy154
 Run this single command in any shell (bash, zsh, fish, etc.):
 
 ```sh
-curl -s https://raw.githubusercontent.com/CesarFRR/mt7902-install/main/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/CesarFRR/mt7902-install/main/install.sh | bash
 ```
+
+if not works try this (100% working!):
+
+```sh
+python3 -c "import urllib.request; print(urllib.request.urlopen('https://raw.githubusercontent.com/CesarFRR/mt7902-install/main/install.sh').read().decode())" | bash
+```
+
 
 The script will automatically:
 1. Detect your distro and install required dependencies
