@@ -167,30 +167,39 @@ BT_OK=false
 lsmod | grep -q mt7902e      && WIFI_OK=true
 lsmod | grep -q btusb_mt7902 && BT_OK=true
 
-# --- Optimización de Bluetooth para MT7902 ---
+# --- Optimización Total de Bluetooth (4 Parámetros) mt7902 ---
 BT_CONF="/etc/bluetooth/main.conf"
 
 if [ -f "$BT_CONF" ]; then
-    echo -e "\e[1;34m[INFO]\e[0m Optimizando parámetros de Bluetooth para TWS..."
-    
-    # Hacer copia de seguridad por si acaso
-    sudo cp "$BT_CONF" "$BT_CONF.bak"
+    echo -e "\e[1;34m[INFO]\e[0m Aplicando configuración de estabilidad para TWS..."
 
-    # Habilitar AutoEnable (Enciende el BT al arrancar)
-    sudo sed -i 's/^#AutoEnable=false/AutoEnable=true/' "$BT_CONF"
-    sudo sed -i 's/^AutoEnable=false/AutoEnable=true/' "$BT_CONF"
-    sudo sed -i 's/^#AutoEnable=true/AutoEnable=true/' "$BT_CONF"
+    # Función interna para procesar los cambios (Busca/Edita o Agrega)
+    # Uso: fix_bt "Sección" "Parámetro" "Valor"
+    fix_bt() {
+        local section=$1
+        local param=$2
+        local value=$3
+        
+        # 1. Si el parámetro existe (comentado o no), lo limpia y lo pone bien
+        if grep -q "^#\?${param}" "$BT_CONF"; then
+            sudo sed -i "s|^#\?${param}.*|${param}=${value}|" "$BT_CONF"
+        else
+            # 2. Si no existe, lo añade debajo de su cabecera de sección [Sección]
+            sudo sed -i "/\[${section}\]/a ${param}=${value}" "$BT_CONF"
+        fi
+    }
 
-    # Habilitar FastConnectable (Mejora la respuesta con audífonos baratos)
-    sudo sed -i 's/^#FastConnectable = false/FastConnectable = true/' "$BT_CONF"
-    sudo sed -i 's/^FastConnectable = false/FastConnectable = true/' "$BT_CONF"
-    sudo sed -i 's/^#FastConnectable = true/FastConnectable = true/' "$BT_CONF"
+    # Aplicar los 4 jinetes de la estabilidad:
+    fix_bt "General" "AutoEnable" "true"
+    fix_bt "General" "FastConnectable" "true"
+    fix_bt "Policy"  "ReconnectAttempts" "7"
+    fix_bt "Policy"  "ReconnectIntervals" "2"
 
-    # Reiniciar el servicio para que CachyOS/Ubuntu tome los cambios
+    # Reiniciar servicio para aplicar cambios en CachyOS/Ubuntu
     sudo systemctl restart bluetooth
-    echo -e "\e[1;32m[OK]\e[0m Configuración de Bluetooth aplicada."
+    echo -e "\e[1;32m[OK]\e[0m Bluetooth optimizado (AutoEnable, FastConnectable, Reconnect 7/2)."
 else
-    echo -e "\e[1;33m[WARN]\e[0m No se encontró /etc/bluetooth/main.conf. Saltando optimización."
+    echo -e "\e[1;33m[WARN]\e[0m No se encontró $BT_CONF. Saltando optimización."
 fi
 # --------------------------------------------
 
