@@ -114,9 +114,13 @@ elif [[ "$DISTRO" == "debian" ]]; then
         read -rp "$(echo -e "${CYAN}[?]${NC} ¿Deseas aplicar el Kernel nuevo y reiniciar ahora? [s/N]: ")" RESP </dev/tty
         
         if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            info "Actualizando Kernel y reiniciando..."
-            sudo DEBIAN_FRONTEND=noninteractive apt full-upgrade -y
-            success "Listo. Reiniciando en 5 segundos..."
+            info "Forzando la actualización del Kernel a la última versión disponible..."
+            # Instalamos explícitamente la imagen del kernel junto con el upgrade
+            sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-image-amd64 linux-headers-amd64 -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+            sudo DEBIAN_FRONTEND=noninteractive apt full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+            
+            success "Kernel actualizado. Reiniciando en 5 segundos..."
+            echo -e "${YELLOW}Al volver, el sistema usará el kernel $LATEST_HEADERS y el driver podrá compilar.${NC}"
             sleep 5
             sudo reboot
         else
