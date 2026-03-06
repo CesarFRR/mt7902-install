@@ -60,71 +60,42 @@ if [[ "$DISTRO" == "arch" ]]; then
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
 elif [[ "$DISTRO" == "debian" ]]; then
-    # 1. Limpieza de CD-ROM (Evita errores de lectura si el USB/ISO no está montado)
+    # Limpiar cdrom de sources.list si existe
     sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
 
-    # 2. Reparación preventiva (Por si el sistema se interrumpió o quedó 'sucio')
+    # Reparar paquetes interrumpidos
     info "Verificando integridad del sistema de paquetes..."
     sudo dpkg --configure -a 2>/dev/null
 
-    # 3. Actualización de repositorios
+    # Actualizar repositorios
     info "Actualizando repositorios..."
     sudo apt update -qq
 
-    # 4. Reparación profunda y silenciosa (Evita cuadros azules de configuración)
-    info "Reparando posibles dependencias rotas y estabilizando el sistema..."
-    sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -qq
+    # Reparar dependencias rotas silenciosamente
+    sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" -qq
 
-    # 5. Instalación de herramientas base
+    # Instalar herramientas base
     info "Instalando herramientas de compilación..."
-    if ! sudo DEBIAN_FRONTEND=noninteractive apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" clang git build-essential; then
-        warn "Fallo inicial. Intentando forzar actualización de librerías base..."
-        sudo DEBIAN_FRONTEND=noninteractive apt install -y libc6 libc6-dev
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y \
+        -o Dpkg::Options::="--force-confdef" \
+        -o Dpkg::Options::="--force-confold" \
+        clang git build-essential
+
+    # Instalar headers: primero el exacto, si falla el metapaquete
+    info "Instalando headers del kernel..."
+    sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
+
+    # Validar que los headers coincidan con el kernel corriendo
+    INSTALLED_HEADERS=$(dpkg -l | grep "linux-headers-$(uname -r | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" | awk '{print $2}' | head -n1)
+    if [[ -z "$INSTALLED_HEADERS" ]]; then
+        warn "Los headers instalados podrían no coincidir con el kernel actual ($(uname -r))."
+        warn "Si la compilación falla, reinicia para cargar el kernel más reciente y vuelve a ejecutar el script."
+    else
+        success "Headers sincronizados con el kernel $(uname -r)."
     fi
-
-    # 6. Instalación de Headers e IMAGEN del Kernel (Fundamental para sincronizar motor y manual)
-    info "Sincronizando Kernel y Headers..."
-    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64 linux-image-amd64 -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-
-    # ── VALIDACIÓN DE KERNEL (Sincronización robusta con Regex) ─────────────
-    # Extraemos solo números (X.Y.Z) para ignorar sufijos como '+kali'
-    LATEST_HEADERS=$(dpkg -l | grep linux-headers- | grep amd64 | awk '{print $3}' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
-    CURRENT_KERNEL=$(uname -r | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
-
-    info "Versión Headers: $LATEST_HEADERS | Versión Kernel: $CURRENT_KERNEL"
-
-    if [[ -n "$LATEST_HEADERS" && "$LATEST_HEADERS" != "$CURRENT_KERNEL" ]]; then
-        echo -e "\n${YELLOW}╔══════════════════════ ACCIÓN REQUERIDA ══════════════════════╗${NC}"
-        echo -e "${YELLOW}║${NC} Se han instalado headers para el kernel ${GREEN}$LATEST_HEADERS${NC}    ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC} Pero tu sistema aún corre con el kernel ${RED}$CURRENT_KERNEL${NC}      ${YELLOW}║${NC}"
-        echo -e "${YELLOW}╟──────────────────────────────────────────────────────────────╢${NC}"
-        echo -e "${YELLOW}║${NC} IMPORTANTE: Para que el driver compile, el Kernel y sus     ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC} Headers deben coincidir. Es necesario reiniciar.            ${YELLOW}║${NC}"
-        echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}\n"
-
-        # Forzamos lectura desde /dev/tty para no colapsar con el pipe de curl/wget
-        read -rp "$(echo -e "${CYAN}[?]${NC} ¿Deseas aplicar el Kernel nuevo y REINICIAR ahora? [s/N]: ")" RESP </dev/tty
-        
-        if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            info "Actualizando cargador de arranque y preparando reinicio..."
-            
-            # Intentamos actualizar el menú de arranque si existe el comando (GRUB)
-            if command -v update-grub &>/dev/null; then
-                sudo update-grub
-            fi
-            
-            # Aseguramos que el sistema de archivos de arranque esté listo para el nuevo kernel
-            sudo update-initramfs -u -k "all" 2>/dev/null
-            
-            success "Listo. Reiniciando en 5 segundos..."
-            echo -e "${YELLOW}Al volver, ejecuta el script de nuevo para terminar la instalación.${NC}"
-            sleep 5
-            sudo reboot
-        else
-            error "Cancelado. Debes reiniciar manualmente con el kernel $LATEST_HEADERS para continuar."
-        fi
-    fi
-    # ────────────────────────────────────────────────────────────────────────
 fi
 
 success "Dependencias instaladas."
