@@ -71,7 +71,11 @@ elif [[ "$DISTRO" == "debian" ]]; then
     sudo apt update -qq
     
     info "Instalando paquetes necesarios..."
-    sudo apt install -y clang git build-essential "linux-headers-$(uname -r)"
+    # Intentar instalar headers específicos, si falla, intentar los genéricos de la arquitectura
+    if ! sudo apt install -y clang git build-essential "linux-headers-$(uname -r)"; then
+        warn "No se encontraron headers exactos para $(uname -r). Intentando versión genérica..."
+        sudo apt install -y "linux-headers-amd64" || error "No se pudieron instalar los headers del kernel."
+    fi
 fi
 
 success "Dependencias instaladas."
