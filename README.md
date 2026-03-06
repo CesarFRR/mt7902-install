@@ -1,3 +1,4 @@
+## ENGLISH:
 # mt7902 Driver Installer
 
 Automatic installer for the [MT7902 Wi-Fi driver](https://github.com/hmtheboy154/mt7902/tree/backport) on Linux.
@@ -41,7 +42,7 @@ You should see `mt7902e` in the output.
 - For Bluetooth support, check the [bluetooth_backport branch](https://github.com/hmtheboy154/mt7902/tree/bluetooth_backport).
 
 ---
-
+## SPANISH:
 # Instalador del driver mt7902
 
 Instalador automático del [driver Wi-Fi MT7902](https://github.com/hmtheboy154/mt7902/tree/backport) para Linux.
