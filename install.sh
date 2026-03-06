@@ -139,6 +139,13 @@ success "Driver Bluetooth instalado."
 
 info "Instalando firmware Bluetooth..."
 sudo make install_fw
+
+# El Makefile del repo instala el firmware en un subdirectorio incorrecto
+if [[ -d "/lib/firmware/mediatek/btusb_mt7902" ]]; then
+    info "Corrigiendo ruta del firmware Bluetooth..."
+    sudo mv /lib/firmware/mediatek/btusb_mt7902/* /lib/firmware/mediatek/
+    sudo rmdir /lib/firmware/mediatek/btusb_mt7902
+fi
 success "Firmware Bluetooth instalado."
 
 # btusb y btmtk del kernel conflictúan con btusb_mt7902
@@ -151,6 +158,7 @@ success "Blacklist aplicado."
 # ════════════════════════════════════════════
 info "Cargando módulos..."
 sudo modprobe mt7902e
+sudo modprobe -r btusb btmtk 2>/dev/null
 sudo modprobe btusb_mt7902 2>/dev/null || warn "Bluetooth requiere reinicio para cargar."
 
 echo ""
@@ -166,7 +174,7 @@ if $WIFI_OK && $BT_OK; then
 elif $WIFI_OK; then
     echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║   ✓  WiFi cargado correctamente          ║${NC}"
-    echo -e "${YELLOW}║   !  Bluetooth requiere reinicio        ║${NC}"
+    echo -e "${YELLOW}║   !  Bluetooth requiere reinicio         ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
 else
     echo -e "${RED}╔══════════════════════════════════════════╗${NC}"
