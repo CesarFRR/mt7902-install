@@ -87,15 +87,31 @@ elif [[ "$DISTRO" == "debian" ]]; then
     info "Instalando headers del kernel..."
     sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
     sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
-
-    # Validar que los headers coincidan con el kernel corriendo
-    INSTALLED_HEADERS=$(dpkg -l | grep "linux-headers-$(uname -r | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')" | awk '{print $2}' | head -n1)
-    if [[ -z "$INSTALLED_HEADERS" ]]; then
-        warn "Los headers instalados podrían no coincidir con el kernel actual ($(uname -r))."
-        warn "Si la compilación falla, reinicia para cargar el kernel más reciente y vuelve a ejecutar el script."
-    else
-        success "Headers sincronizados con el kernel $(uname -r)."
+    
+    # Verificar que el build dir existe (crítico para compilar)
+    if [[ ! -d "/lib/modules/$(uname -r)/build" ]]; then
+        warn "No se encontró el directorio build para el kernel $(uname -r)."
+        info "Buscando paquete de headers compatible..."
+        
+        # Buscar por versión numérica ignorando sufijos (+kali, etc.)
+        KERNEL_BASE=$(uname -r | grep -oE '[0-9]+\.[0-9]+')
+        HEADERS_PKG=$(apt-cache search "linux-headers-${KERNEL_BASE}" \
+            | grep -v "dbg\|common" | awk '{print $1}' | head -n1)
+    
+        if [[ -n "$HEADERS_PKG" ]]; then
+            info "Instalando $HEADERS_PKG..."
+            sudo apt install -y "$HEADERS_PKG"
+        else
+            error "No se encontraron headers para el kernel $(uname -r). Reinicia y vuelve a ejecutar el script."
+        fi
     fi
+    
+    # Verificación final
+    if [[ ! -d "/lib/modules/$(uname -r)/build" ]]; then
+        error "El directorio build sigue sin existir. Reinicia el sistema para cargar el kernel actualizado y vuelve a ejecutar el script."
+    fi
+    
+    success "Headers sincronizados con el kernel $(uname -r)."
 fi
 
 success "Dependencias instaladas."
