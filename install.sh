@@ -61,7 +61,16 @@ if [[ "$DISTRO" == "arch" ]]; then
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
 
 elif [[ "$DISTRO" == "debian" ]]; then
+    # Solución al error de CD-ROM: Comenta las líneas de cdrom en sources.list si existen
+    if grep -q "cdrom:" /etc/apt/sources.list; then
+        info "Desactivando repositorios de CD-ROM para evitar errores..."
+        sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list
+    fi
+
+    info "Actualizando repositorios..."
     sudo apt update -qq
+    
+    info "Instalando paquetes necesarios..."
     sudo apt install -y clang git build-essential "linux-headers-$(uname -r)"
 fi
 
