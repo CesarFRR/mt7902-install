@@ -59,22 +59,22 @@ if [[ "$DISTRO" == "arch" ]]; then
     done
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
-
 elif [[ "$DISTRO" == "debian" ]]; then
-    # Solución al error de CD-ROM: Comenta las líneas de cdrom en sources.list si existen
-    if grep -q "cdrom:" /etc/apt/sources.list; then
-        info "Desactivando repositorios de CD-ROM para evitar errores..."
-        sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list
-    fi
+    # 1. Limpieza de CD-ROM (Solución al error anterior)
+    sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
 
     info "Actualizando repositorios..."
     sudo apt update -qq
-    
+
     info "Instalando paquetes necesarios..."
-    # Intentar instalar headers específicos, si falla, intentar los genéricos de la arquitectura
-    if ! sudo apt install -y clang git build-essential "linux-headers-$(uname -r)"; then
-        warn "No se encontraron headers exactos para $(uname -r). Intentando versión genérica..."
-        sudo apt install -y "linux-headers-amd64" || error "No se pudieron instalar los headers del kernel."
+    # Usamos el metapaquete linux-headers-generic o linux-headers-amd64
+    # Estos siempre apuntan a la versión correcta sin importar los números del kernel
+    if [[ -f /etc/kali_version ]]; then
+        # Específico para Kali
+        sudo apt install -y clang git build-essential linux-headers-amd64
+    else
+        # Para Ubuntu/Debian/Kubuntu
+        sudo apt install -y clang git build-essential linux-headers-generic || sudo apt install -y linux-headers-amd64
     fi
 fi
 
