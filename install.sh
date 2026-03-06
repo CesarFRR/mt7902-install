@@ -83,34 +83,23 @@ elif [[ "$DISTRO" == "debian" ]]; then
         -o Dpkg::Options::="--force-confold" \
         clang git build-essential
 
-    # Instalar headers: primero el exacto, si falla el metapaquete
+    # Instalar headers: primero el exacto (Ubuntu/Debian), si falla el metapaquete (Kali)
     info "Instalando headers del kernel..."
     sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
     sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
-    
+
     # Verificar que el build dir existe (crítico para compilar)
     if [[ ! -d "/lib/modules/$(uname -r)/build" ]]; then
-        warn "No se encontró el directorio build para el kernel $(uname -r)."
-        info "Buscando paquete de headers compatible..."
-        
-        # Buscar por versión numérica ignorando sufijos (+kali, etc.)
-        KERNEL_BASE=$(uname -r | grep -oE '[0-9]+\.[0-9]+')
-        HEADERS_PKG=$(apt-cache search "linux-headers-${KERNEL_BASE}" \
-            | grep -v "dbg\|common" | awk '{print $1}' | head -n1)
-    
-        if [[ -n "$HEADERS_PKG" ]]; then
-            info "Instalando $HEADERS_PKG..."
-            sudo apt install -y "$HEADERS_PKG"
+        echo -e "\n${YELLOW}Los headers instalados requieren reiniciar para sincronizar con el kernel.${NC}"
+        echo -e "${YELLOW}Esto es normal en Kali Linux. Reinicia y vuelve a ejecutar el script.${NC}\n"
+        read -rp "¿Reiniciar ahora? [s/N]: " RESP </dev/tty
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            sudo reboot
         else
-            error "No se encontraron headers para el kernel $(uname -r). Reinicia y vuelve a ejecutar el script."
+            error "Cancelado. Reinicia manualmente y vuelve a ejecutar el script."
         fi
     fi
-    
-    # Verificación final
-    if [[ ! -d "/lib/modules/$(uname -r)/build" ]]; then
-        error "El directorio build sigue sin existir. Reinicia el sistema para cargar el kernel actualizado y vuelve a ejecutar el script."
-    fi
-    
+
     success "Headers sincronizados con el kernel $(uname -r)."
 fi
 
