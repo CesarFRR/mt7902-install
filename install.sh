@@ -94,7 +94,7 @@ echo -e "  Para que el driver cargue, ${YELLOW}reinicia el sistema${NC}."
 echo -e "  Luego verifica con: ${CYAN}lsmod | grep mt7902${NC}"
 echo ""
 
-read -rp "¿Reiniciar ahora? [s/N]: " REBOOT
+read -rp "¿Reiniciar ahora? [s/N]: " REBOOT </dev/tty
 if [[ "$REBOOT" =~ ^[sS]$ ]]; then
     sudo reboot
 fi
