@@ -84,17 +84,28 @@ info "Instalando firmware..."
 sudo make install_fw
 success "Firmware instalado."
 
+
 # ── Verificar ────────────────────────────────
+info "Cargando el módulo..."
+sudo modprobe mt7902e
+
 echo ""
-echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║        Instalación completada        ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
-echo ""
-echo -e "  Para que el driver cargue, ${YELLOW}reinicia el sistema${NC}."
-echo -e "  Luego verifica con: ${CYAN}lsmod | grep mt7902${NC}"
+if lsmod | grep -q mt7902e; then
+    echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║   ✓  Driver cargado correctamente    ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  El driver ${CYAN}mt7902e${NC} está activo ahora mismo."
+    echo -e "  También cargará ${GREEN}automáticamente${NC} en cada arranque."
+    echo -e "  Tu Wi-Fi debería aparecer en el sistema, REVISA!!."
+else
+    echo -e "${RED}╔══════════════════════════════════════╗${NC}"
+    echo -e "${RED}║   ✗  No se pudo cargar el módulo     ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  Revisa los errores con: ${CYAN}dmesg | grep mt7902${NC}"
+fi
 echo ""
 
-read -rp "¿Reiniciar ahora? [s/N]: " REBOOT </dev/tty
-if [[ "$REBOOT" =~ ^[sS]$ ]]; then
-    sudo reboot
-fi
+
+
