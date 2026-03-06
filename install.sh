@@ -2,7 +2,7 @@
 set -e
 
 # ─────────────────────────────────────────────
-#  mt7902 Driver Installer
+#  mt7902 Driver Installer (WiFi + Bluetooth)
 #  Compatible: Arch/CachyOS/Manjaro | Ubuntu/Debian
 # ─────────────────────────────────────────────
 
@@ -49,7 +49,6 @@ success "Kernel $KERNEL_VER compatible."
 info "Instalando dependencias..."
 
 if [[ "$DISTRO" == "arch" ]]; then
-    # Detectar headers correctos (cachyos, linux, linux-lts, etc.)
     HEADERS_PKG=""
     for pkg in linux-cachyos-headers linux-zen-headers linux-lts-headers linux-headers; do
         if pacman -Qi "$pkg" &>/dev/null || pacman -Si "$pkg" &>/dev/null 2>/dev/null; then
@@ -59,36 +58,30 @@ if [[ "$DISTRO" == "arch" ]]; then
     done
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
+
 elif [[ "$DISTRO" == "debian" ]]; then
-    # Limpiar cdrom de sources.list si existe
     sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
 
-    # Reparar paquetes interrumpidos
     info "Verificando integridad del sistema de paquetes..."
     sudo dpkg --configure -a 2>/dev/null
 
-    # Actualizar repositorios
     info "Actualizando repositorios..."
     sudo apt update -qq
 
-    # Reparar dependencias rotas silenciosamente
     sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y \
         -o Dpkg::Options::="--force-confdef" \
         -o Dpkg::Options::="--force-confold" -qq
 
-    # Instalar herramientas base
     info "Instalando herramientas de compilación..."
     sudo DEBIAN_FRONTEND=noninteractive apt install -y \
         -o Dpkg::Options::="--force-confdef" \
         -o Dpkg::Options::="--force-confold" \
         clang git build-essential
 
-    # Instalar headers: primero el exacto (Ubuntu/Debian), si falla el metapaquete (Kali)
     info "Instalando headers del kernel..."
     sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
     sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
 
-    # Verificar que el build dir existe (crítico para compilar)
     if [[ ! -d "/lib/modules/$(uname -r)/build" ]]; then
         echo -e "\n${YELLOW}Los headers instalados requieren reiniciar para sincronizar con el kernel.${NC}"
         echo -e "${YELLOW}Esto es normal en Kali Linux. Reinicia y vuelve a ejecutar el script.${NC}\n"
@@ -105,16 +98,7 @@ fi
 
 success "Dependencias instaladas."
 
-# ── Clonar repositorio ───────────────────────
-TMPDIR=$(mktemp -d)
-info "Clonando repositorio en $TMPDIR..."
-git clone --branch backport --depth 1 https://github.com/hmtheboy154/mt7902 "$TMPDIR/mt7902"
-cd "$TMPDIR/mt7902"
-success "Repositorio clonado."
-
-# ── Compilar e instalar driver ───────────────
-info "Compilando driver (esto puede tardar unos segundos)..."
-# Detectar compilador del kernel
+# ── Detectar compilador del kernel ──────────
 if grep -q "clang" /proc/version 2>/dev/null; then
     info "Kernel compilado con Clang, usando LLVM=1..."
     MAKE_FLAGS="LLVM=1"
@@ -123,36 +107,76 @@ else
     MAKE_FLAGS=""
 fi
 
+TMPDIR=$(mktemp -d)
+
+# ════════════════════════════════════════════
+#  WiFi
+# ════════════════════════════════════════════
+info "Clonando driver WiFi..."
+git clone --branch backport --depth 1 https://github.com/hmtheboy154/mt7902 "$TMPDIR/mt7902"
+cd "$TMPDIR/mt7902"
+success "Repositorio WiFi clonado."
+
+info "Compilando driver WiFi..."
 sudo make install -j"$(nproc)" $MAKE_FLAGS
-success "Driver instalado."
+success "Driver WiFi instalado."
 
-# ── Instalar firmware ────────────────────────
-info "Instalando firmware..."
+info "Instalando firmware WiFi..."
 sudo make install_fw
-success "Firmware instalado."
+success "Firmware WiFi instalado."
 
+# ════════════════════════════════════════════
+#  Bluetooth
+# ════════════════════════════════════════════
+info "Clonando driver Bluetooth..."
+git clone --branch bluetooth_backport --depth 1 https://github.com/hmtheboy154/mt7902 "$TMPDIR/btusb_mt7902"
+cd "$TMPDIR/btusb_mt7902"
+success "Repositorio Bluetooth clonado."
 
-# ── Verificar ────────────────────────────────
-info "Cargando el módulo..."
+info "Compilando driver Bluetooth..."
+sudo make install -j"$(nproc)" $MAKE_FLAGS
+success "Driver Bluetooth instalado."
+
+info "Instalando firmware Bluetooth..."
+sudo make install_fw
+success "Firmware Bluetooth instalado."
+
+# btusb y btmtk del kernel conflictúan con btusb_mt7902
+info "Aplicando blacklist de btusb y btmtk..."
+echo -e "blacklist btusb\nblacklist btmtk" | sudo tee /etc/modprobe.d/blacklist_btusb.conf > /dev/null
+success "Blacklist aplicado."
+
+# ════════════════════════════════════════════
+#  Verificar
+# ════════════════════════════════════════════
+info "Cargando módulos..."
 sudo modprobe mt7902e
+sudo modprobe btusb_mt7902 2>/dev/null || warn "Bluetooth requiere reinicio para cargar."
 
 echo ""
-if lsmod | grep -q mt7902e; then
-    echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║   ✓  Driver cargado correctamente    ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  El driver ${CYAN}mt7902e${NC} está activo ahora mismo."
-    echo -e "  También cargará ${GREEN}automáticamente${NC} en cada arranque."
-    echo -e "  Tu Wi-Fi debería aparecer en el sistema, REVISA!!."
+WIFI_OK=false
+BT_OK=false
+lsmod | grep -q mt7902e      && WIFI_OK=true
+lsmod | grep -q btusb_mt7902 && BT_OK=true
+
+if $WIFI_OK && $BT_OK; then
+    echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║   ✓  WiFi y Bluetooth cargados, revisa!! ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+elif $WIFI_OK; then
+    echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║   ✓  WiFi cargado correctamente          ║${NC}"
+    echo -e "${YELLOW}║   !  Bluetooth requiere reinicio        ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
 else
-    echo -e "${RED}╔══════════════════════════════════════╗${NC}"
-    echo -e "${RED}║   ✗  No se pudo cargar el módulo     ║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════╝${NC}"
+    echo -e "${RED}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║   ✗  No se pudo cargar el módulo WiFi    ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  Revisa los errores con: ${CYAN}dmesg | grep mt7902${NC}"
 fi
+
 echo ""
-
-
-
+echo -e "  Los drivers cargarán ${GREEN}automáticamente${NC} en cada arranque."
+echo -e "  Si el Bluetooth no funciona, reinicia el sistema."
+echo ""
