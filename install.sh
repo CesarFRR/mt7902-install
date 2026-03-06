@@ -60,33 +60,34 @@ if [[ "$DISTRO" == "arch" ]]; then
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
 elif [[ "$DISTRO" == "debian" ]]; then
-    # 1. Limpieza de CD-ROM
+    # 1. Limpieza de CD-ROM (Evita errores de lectura de disco/USB)
     sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
 
-    # 2. Reparación preventiva (Por si el sistema quedó "sucio" de antes)
+    # 2. Reparación preventiva de DPKG (Por si se interrumpió antes)
     info "Verificando integridad del sistema de paquetes..."
     sudo dpkg --configure -a 2>/dev/null
-    sudo apt install -f -y -qq
 
+    # 3. Actualización de repositorios
     info "Actualizando repositorios..."
     sudo apt update -qq
 
-    # 3. Reparación de dependencias (Aquí es donde se arregla lo de libc6)
-    info "Reparando dependencias rotas..."
-    sudo apt --fix-broken install -y -qq
+    # 4. Reparación profunda de dependencias (Arregla libc6 y PostgreSQL en modo silencioso)
+    info "Reparando posibles dependencias rotas y estabilizando el sistema..."
+    sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-    info "Instalando paquetes necesarios..."
-    # Intentamos instalar lo básico primero. Si falla, intentamos una reparación más
-    if ! sudo apt install -y clang git build-essential; then
-        warn "Fallo inicial. Intentando estabilizar libc6 y reintentar..."
-        sudo apt install -y libc6 libc6-dev
-        sudo apt install -y clang git build-essential
+    # 5. Instalación de paquetes base (Clang, Git, Build-Essential)
+    info "Instalando herramientas de compilación en modo no interactivo..."
+    if ! sudo DEBIAN_FRONTEND=noninteractive apt install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" clang git build-essential; then
+        warn "Fallo inicial. Intentando forzar actualización de librerías base..."
+        sudo DEBIAN_FRONTEND=noninteractive apt install -y libc6 libc6-dev
+        sudo DEBIAN_FRONTEND=noninteractive apt install -y clang git build-essential
     fi
 
-    # 4. Instalación de headers (Tu lógica universal)
-    sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
-    sudo apt install -y linux-headers-generic 2>/dev/null || \
-    sudo apt install -y linux-headers-amd64
+    # 6. Instalación de headers (Lógica universal para Kali/Ubuntu/Debian)
+    info "Instalando headers del kernel..."
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-generic 2>/dev/null || \
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
 fi
 
 success "Dependencias instaladas."
