@@ -60,15 +60,30 @@ if [[ "$DISTRO" == "arch" ]]; then
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
 elif [[ "$DISTRO" == "debian" ]]; then
-    # 1. Limpieza de CD-ROM (Solución al error anterior)
+    # 1. Limpieza de CD-ROM
     sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
+
+    # 2. Reparación preventiva (Por si el sistema quedó "sucio" de antes)
+    info "Verificando integridad del sistema de paquetes..."
+    sudo dpkg --configure -a 2>/dev/null
+    sudo apt install -f -y -qq
 
     info "Actualizando repositorios..."
     sudo apt update -qq
 
+    # 3. Reparación de dependencias (Aquí es donde se arregla lo de libc6)
+    info "Reparando dependencias rotas..."
+    sudo apt --fix-broken install -y -qq
+
     info "Instalando paquetes necesarios..."
-    # Instalación a prueba de cualquier distro basada en debian:
-    sudo apt install -y clang git build-essential
+    # Intentamos instalar lo básico primero. Si falla, intentamos una reparación más
+    if ! sudo apt install -y clang git build-essential; then
+        warn "Fallo inicial. Intentando estabilizar libc6 y reintentar..."
+        sudo apt install -y libc6 libc6-dev
+        sudo apt install -y clang git build-essential
+    fi
+
+    # 4. Instalación de headers (Tu lógica universal)
     sudo apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
     sudo apt install -y linux-headers-generic 2>/dev/null || \
     sudo apt install -y linux-headers-amd64
