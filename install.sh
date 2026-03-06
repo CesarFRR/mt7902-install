@@ -60,10 +60,10 @@ if [[ "$DISTRO" == "arch" ]]; then
     [[ -z "$HEADERS_PKG" ]] && error "No se encontró paquete de headers del kernel."
     sudo pacman -S --needed --noconfirm "$HEADERS_PKG" clang git base-devel
 elif [[ "$DISTRO" == "debian" ]]; then
-    # 1. Limpieza de CD-ROM
+    # 1. Limpieza de CD-ROM (Evita errores de lectura si el USB/ISO no está montado)
     sudo sed -i '/cdrom/s/^/#/' /etc/apt/sources.list 2>/dev/null
 
-    # 2. Reparación preventiva de DPKG
+    # 2. Reparación preventiva (Por si el sistema se interrumpió o quedó 'sucio')
     info "Verificando integridad del sistema de paquetes..."
     sudo dpkg --configure -a 2>/dev/null
 
@@ -71,7 +71,7 @@ elif [[ "$DISTRO" == "debian" ]]; then
     info "Actualizando repositorios..."
     sudo apt update -qq
 
-    # 4. Reparación profunda y silenciosa (Evita cuadros azules)
+    # 4. Reparación profunda y silenciosa (Evita cuadros azules de configuración)
     info "Reparando posibles dependencias rotas y estabilizando el sistema..."
     sudo DEBIAN_FRONTEND=noninteractive apt --fix-broken install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -qq
 
@@ -82,49 +82,46 @@ elif [[ "$DISTRO" == "debian" ]]; then
         sudo DEBIAN_FRONTEND=noninteractive apt install -y libc6 libc6-dev
     fi
 
-    # 6. Instalación de headers (Lógica universal)
-    info "Instalando headers del kernel..."
-    sudo DEBIAN_FRONTEND=noninteractive apt install -y "linux-headers-$(uname -r)" 2>/dev/null || \
-    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-generic 2>/dev/null || \
-    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64
+    # 6. Instalación de Headers e IMAGEN del Kernel (Fundamental para sincronizar motor y manual)
+    info "Sincronizando Kernel y Headers..."
+    sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-headers-amd64 linux-image-amd64 -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-    # ── VALIDACIÓN DE KERNEL (Sincronización necesaria) ─────────────────────
-    # Extraemos la versión de los headers instalados vs kernel actual
-    # ── VALIDACIÓN DE KERNEL (Sincronización robusta) ─────────────────────
-    # 1. Extraemos solo los números de los headers instalados (ej: 6.18.12)
+    # ── VALIDACIÓN DE KERNEL (Sincronización robusta con Regex) ─────────────
+    # Extraemos solo números (X.Y.Z) para ignorar sufijos como '+kali'
     LATEST_HEADERS=$(dpkg -l | grep linux-headers- | grep amd64 | awk '{print $3}' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
-    
-    # 2. Extraemos solo los números del kernel en ejecución (ej: 6.12.38)
-    # Esto elimina el "+kali-amd64" o cualquier otro sufijo de distro
     CURRENT_KERNEL=$(uname -r | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 
     info "Versión Headers: $LATEST_HEADERS | Versión Kernel: $CURRENT_KERNEL"
 
     if [[ -n "$LATEST_HEADERS" && "$LATEST_HEADERS" != "$CURRENT_KERNEL" ]]; then
-        echo -e "\n${YELLOW}╔══════════════════════ ATENCIÓN ══════════════════════╗${NC}"
+        echo -e "\n${YELLOW}╔══════════════════════ ACCIÓN REQUERIDA ══════════════════════╗${NC}"
         echo -e "${YELLOW}║${NC} Se han instalado headers para el kernel ${GREEN}$LATEST_HEADERS${NC}    ${YELLOW}║${NC}"
         echo -e "${YELLOW}║${NC} Pero tu sistema aún corre con el kernel ${RED}$CURRENT_KERNEL${NC}      ${YELLOW}║${NC}"
-        echo -e "${YELLOW}╟──────────────────────────────────────────────────────╢${NC}"
-        echo -e "${YELLOW}║${NC} IMPORTANTE: Para que el driver compile, el Kernel   ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC} y sus Headers deben ser la misma versión.           ${YELLOW}║${NC}"
-        echo -e "${YELLOW}║${NC} Es obligatorio actualizar y REINICIAR el equipo.     ${YELLOW}║${NC}"
-        echo -e "${YELLOW}╚══════════════════════════════════════════════════════╝${NC}\n"
+        echo -e "${YELLOW}╟──────────────────────────────────────────────────────────────╢${NC}"
+        echo -e "${YELLOW}║${NC} IMPORTANTE: Para que el driver compile, el Kernel y sus     ${YELLOW}║${NC}"
+        echo -e "${YELLOW}║${NC} Headers deben coincidir. Es necesario reiniciar.            ${YELLOW}║${NC}"
+        echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}\n"
 
-        # Forzamos lectura desde la terminal (/dev/tty) para saltar el pipe del curl
-        read -rp "$(echo -e "${CYAN}[?]${NC} ¿Deseas aplicar el Kernel nuevo y reiniciar ahora? [s/N]: ")" RESP </dev/tty
+        # Forzamos lectura desde /dev/tty para no colapsar con el pipe de curl/wget
+        read -rp "$(echo -e "${CYAN}[?]${NC} ¿Deseas aplicar el Kernel nuevo y REINICIAR ahora? [s/N]: ")" RESP </dev/tty
         
         if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            info "Forzando la actualización del Kernel a la última versión disponible..."
-            # Instalamos explícitamente la imagen del kernel junto con el upgrade
-            sudo DEBIAN_FRONTEND=noninteractive apt install -y linux-image-amd64 linux-headers-amd64 -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-            sudo DEBIAN_FRONTEND=noninteractive apt full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+            info "Actualizando cargador de arranque y preparando reinicio..."
             
-            success "Kernel actualizado. Reiniciando en 5 segundos..."
-            echo -e "${YELLOW}Al volver, el sistema usará el kernel $LATEST_HEADERS y el driver podrá compilar.${NC}"
+            # Intentamos actualizar el menú de arranque si existe el comando (GRUB)
+            if command -v update-grub &>/dev/null; then
+                sudo update-grub
+            fi
+            
+            # Aseguramos que el sistema de archivos de arranque esté listo para el nuevo kernel
+            sudo update-initramfs -u -k "all" 2>/dev/null
+            
+            success "Listo. Reiniciando en 5 segundos..."
+            echo -e "${YELLOW}Al volver, ejecuta el script de nuevo para terminar la instalación.${NC}"
             sleep 5
             sudo reboot
         else
-            error "Cancelado. Debes reiniciar manualmente con el kernel nuevo para continuar."
+            error "Cancelado. Debes reiniciar manualmente con el kernel $LATEST_HEADERS para continuar."
         fi
     fi
     # ────────────────────────────────────────────────────────────────────────
